@@ -10,7 +10,7 @@ def test_buy_and_hold_signals_are_all_one():
     assert list(result["signal"]) == [1, 1, 1]
 
 
-def test_ma_crossover_signals():
+def test_ma_crossover_signals_switch_when_short_ma_is_greater():
     df = pd.DataFrame(
         {
             "ma_short": [1, 3, 2],
@@ -19,5 +19,4 @@ def test_ma_crossover_signals():
     )
 
     result = make_ma_crossover_signals(df)
-
     assert list(result["signal"]) == [0, 1, 0]

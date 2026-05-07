@@ -1,13 +1,23 @@
-def add_features(df, short_window=3, long_window=5, momentum_window=3):
-    """
-    Add simple quantitative features to the price data.
-    """
-    df = df.copy()
+import pandas as pd
 
-    df["daily_return"] = df["close"].pct_change()
-    df["cumulative_return"] = (1 + df["daily_return"]).cumprod() - 1
-    df["ma_short"] = df["close"].rolling(window=short_window).mean()
-    df["ma_long"] = df["close"].rolling(window=long_window).mean()
-    df["momentum"] = df["close"] - df["close"].shift(momentum_window)
 
-    return df
+def add_features(
+    df: pd.DataFrame,
+    short_window: int = 5,
+    long_window: int = 20,
+    momentum_window: int = 5,
+    volatility_window: int = 10,
+) -> pd.DataFrame:
+    """Add simple quantitative features used by the trading strategies."""
+    result = df.copy()
+
+    result["daily_return"] = result["close"].pct_change()
+    result["cumulative_return"] = (1 + result["daily_return"].fillna(0)).cumprod() - 1
+    result["ma_short"] = result["close"].rolling(window=short_window).mean()
+    result["ma_long"] = result["close"].rolling(window=long_window).mean()
+    result["momentum"] = result["close"] - result["close"].shift(momentum_window)
+    result["rolling_volatility"] = (
+        result["daily_return"].rolling(window=volatility_window).std()
+    )
+
+    return result

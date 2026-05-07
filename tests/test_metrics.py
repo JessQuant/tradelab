@@ -7,7 +7,7 @@ def test_calculate_metrics_returns_expected_keys():
     df = pd.DataFrame(
         {
             "strategy_return": [0.0, 0.01, -0.02],
-            "portfolio_value": [1000.0, 1010.0, 989.8],
+            "portfolio_value": [10000.0, 10100.0, 9898.0],
         }
     )
 

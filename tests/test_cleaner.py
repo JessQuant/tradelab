@@ -3,7 +3,7 @@ import pandas as pd
 from src.cleaner import clean_price_data
 
 
-def test_clean_price_data_removes_duplicates_and_missing():
+def test_clean_price_data_removes_duplicates_and_missing_values():
     df = pd.DataFrame(
         {
             "date": ["2024-01-01", "2024-01-01", "2024-01-02"],

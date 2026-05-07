@@ -1,67 +1,108 @@
-import pandas as pd
-import matplotlib.pyplot as plt
+from argparse import ArgumentParser
+from pathlib import Path
 
-from src.data_loader import load_price_data
-from src.cleaner import clean_price_data
-from src.features import add_features
+import pandas as pd
+
 from src.backtester import run_backtest
+from src.cleaner import clean_price_data
+from src.data_loader import load_price_data
+from src.features import add_features
 from src.metrics import calculate_metrics
+from src.plotting import plot_equity_curves, plot_metric_comparison
 from src.strategies.buy_and_hold import make_buy_and_hold_signals
 from src.strategies.ma_crossover import make_ma_crossover_signals
 
 
-def main():
-    filepath = "data/sample_prices.csv"
-    initial_cash = 1000.0
+def build_parser() -> ArgumentParser:
+    parser = ArgumentParser(description="Run the tradelab backtesting pipeline.")
+    parser.add_argument(
+        "--input",
+        default="data/sample_prices.csv",
+        help="Path to the input CSV file.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="outputs",
+        help="Directory where output files will be saved.",
+    )
+    parser.add_argument(
+        "--initial-cash",
+        type=float,
+        default=10000.0,
+        help="Starting portfolio value for each strategy.",
+    )
+    parser.add_argument(
+        "--transaction-cost",
+        type=float,
+        default=0.001,
+        help="Transaction cost charged when position changes.",
+    )
+    return parser
 
-    # Load and prepare the data
-    df = load_price_data(filepath)
+
+def run_pipeline(
+    input_path: str,
+    output_dir: str,
+    initial_cash: float,
+    transaction_cost: float,
+) -> pd.DataFrame:
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Load and prepare data
+    df = load_price_data(input_path)
     df = clean_price_data(df)
     df = add_features(df)
+    df.to_csv(output_path / "processed_prices.csv", index=False)
 
-    # Strategy 1: Buy and Hold
-    buy_hold_df = make_buy_and_hold_signals(df)
-    buy_hold_results = run_backtest(buy_hold_df, initial_cash=initial_cash)
-    buy_hold_metrics = calculate_metrics(buy_hold_results, initial_cash=initial_cash)
+    strategy_builders = {
+        "Buy and Hold": make_buy_and_hold_signals,
+        "MA Crossover": make_ma_crossover_signals,
+    }
 
-    # Strategy 2: Moving Average Crossover
-    ma_df = make_ma_crossover_signals(df)
-    ma_results = run_backtest(ma_df, initial_cash=initial_cash)
-    ma_metrics = calculate_metrics(ma_results, initial_cash=initial_cash)
+    strategy_results = {}
+    summary_rows = []
 
-    # Compare results
-    summary = pd.DataFrame(
-        [
-            {"strategy": "Buy and Hold", **buy_hold_metrics},
-            {"strategy": "MA Crossover", **ma_metrics},
-        ]
-    )
+    for strategy_name, signal_builder in strategy_builders.items():
+        strategy_df = signal_builder(df)
+
+        result = run_backtest(
+            strategy_df,
+            initial_cash=initial_cash,
+            transaction_cost=transaction_cost,
+        )
+
+        metrics = calculate_metrics(result, initial_cash=initial_cash)
+
+        safe_name = strategy_name.lower().replace(" ", "_")
+        result.to_csv(output_path / f"{safe_name}_results.csv", index=False)
+
+        strategy_results[strategy_name] = result
+        summary_rows.append({"strategy": strategy_name, **metrics})
+
+    summary_df = pd.DataFrame(summary_rows)
+    summary_df.to_csv(output_path / "performance_summary.csv", index=False)
+
+    plot_equity_curves(strategy_results, output_path / "equity_curve.png")
+    plot_metric_comparison(summary_df, output_path / "metric_comparison.png")
 
     print("\nPerformance summary:\n")
-    print(summary)
+    print(summary_df.round(4))
+    print(f"\nSaved files to {output_path}")
 
-    # Save result tables
-    buy_hold_results.to_csv("data/buy_hold_results.csv", index=False)
-    ma_results.to_csv("data/ma_crossover_results.csv", index=False)
-    summary.to_csv("data/performance_summary.csv", index=False)
+    return summary_df
 
-    # Plot equity curves
-    plt.figure(figsize=(10, 6))
-    plt.plot(buy_hold_results["date"], buy_hold_results["portfolio_value"], label="Buy and Hold")
-    plt.plot(ma_results["date"], ma_results["portfolio_value"], label="MA Crossover")
-    plt.xlabel("Date")
-    plt.ylabel("Portfolio Value")
-    plt.title("Equity Curve Comparison")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig("data/equity_curve.png")
-    plt.show()
 
-    print("\nSaved:")
-    print("- data/buy_hold_results.csv")
-    print("- data/ma_crossover_results.csv")
-    print("- data/performance_summary.csv")
-    print("- data/equity_curve.png")
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+
+    run_pipeline(
+        input_path=args.input,
+        output_dir=args.output_dir,
+        initial_cash=args.initial_cash,
+        transaction_cost=args.transaction_cost,
+    )
 
 
 if __name__ == "__main__":
